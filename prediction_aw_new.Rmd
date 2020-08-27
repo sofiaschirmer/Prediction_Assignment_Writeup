@@ -1,0 +1,185 @@
+---
+title: "Project_Machine_Learning"
+author: "Sofia Coradini"
+date: "27/08/2020"
+output: html_document
+---
+
+# Title: Prediction Assignment Writeup
+
+## 1. Introduction
+
+* The goal of this project is to **predict** the manner in which they did the exercise. This is the "classe" variable in the training set. And create a report describing how i built my model, how i used cross validation, what i think the expected out of sample error is. And i will also use my prediction model to predict 20 different test cases.
+
+### 1.1. Observations
+
+* The "pml-coursera-project.md" is a markdown file, created to aid the reviewers in taking a quick look in the analysis.
+
+* The "pml-training.csv" and "pml-testing.csv" are the original data sets used for the analysis.
+
+* The "testing.with.predictions" file contains a table with the "pml-testing.csv" data set observations along with the predictions performed by the Random Forest model of the analysis, for the variable classe.
+
+## 2. Data Loading and Processing
+
+### 2.1. Load package and set seed
+```{r, echo=TRUE}
+set.seed(12345)
+library(knitr)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(randomForest)
+library(corrplot)
+```
+
+### 2.2.Download raw data 
+
+```{r, echo=TRUE}
+train_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+train_data <- "pml-traininig.csv"
+
+test_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+test_data <- "pml-testing.csv"
+```
+
+### 2.3. Download the datasets
+```{r, echo=TRUE}
+if(!file.exists(train_data))
+{
+    download.file(train_url,destfile = train_data)
+}
+
+training <- read.csv(train_data, stringsAsFactors = TRUE)
+
+if(!file.exists(test_data))
+{
+    download.file(test_url,destfile = test_data)
+}
+
+testing  <- read.csv(test_data, stringsAsFactors = TRUE)
+``` 
+
+### 2.3. create a partition using caret with the training dataset on 70,30 ratio
+
+```{r, echo=TRUE}
+inTrain  <- createDataPartition(training$classe, p=0.7, list=FALSE)
+
+set_train <- training[inTrain, ]
+
+set_test  <- training[-inTrain, ]
+```
+
+### 2.4. Look the dataset
+
+```{r, echo=TRUE}
+dim(set_train)
+dim(set_test)
+```
+
+* Both created datasets have 160 variables.
+
+### 2.5. Remove NA values and identification of variables
+
+```{r, echo=TRUE}
+
+NZV <- nearZeroVar(set_train)
+TrainSet <- set_train[, -NZV]
+TestSet  <- set_test[, -NZV]
+dim(TestSet)
+dim(TrainSet)
+
+AllNA  <- sapply(TrainSet, function(x) mean(is.na(x))) > 0.95
+trainset <- TrainSet[, AllNA==FALSE]
+testset  <- TestSet[, AllNA==FALSE]
+dim(trainset)
+dim(testset)
+
+train_s <- trainset[, -(1:5)]
+test_s  <- testset[, -(1:5)]
+
+dim(train_s)
+dim(test_s)
+
+```
+
+* Now we have just 54 variables.
+
+## 3. Correction Analysis
+
+```{r, echo=TRUE}
+corMatrix <- cor(train_s[, -54])
+corrplot(corMatrix, order = "FPC", method = "circle", type = "lower", 
+         tl.cex = 0.8, tl.col = rgb(0, 0, 0))
+```
+
+## 4 Creating models
+
+### 4.1. Random forest model
+#### 4.1.1 Built the model
+```{r, echo=TRUE}
+set.seed(301)
+control_rf <- trainControl(method="cv", number=3, verboseIter=FALSE)
+mod_RF <- train(classe ~ ., data=train_s, method="rf",
+                          trControl=control_rf)
+pred_rf <- predict(mod_RF, test_s)
+confusionMatrix(test_s$classe, pred_rf)
+
+```
+* The predictive accuracy of the Random Forest model is 99.8 %.
+ 
+
+### 4.2. Decision tree
+
+#### 4.2.1. Decision tree
+```{r, echo=TRUE}
+set.seed(1813)
+fit_decision_tree <- rpart(classe ~ ., data = train_s, method="class")
+fancyRpartPlot(fit_decision_tree)
+```
+
+#### 4.2.2. Building the model
+```{r, echo=TRUE}
+predict_decision_tree <- predict(fit_decision_tree, newdata = test_s, type="class")
+conf_matrix_decision_tree <- confusionMatrix(predict_decision_tree, test_s$classe)
+conf_matrix_decision_tree
+```
+ * The predictive accuracy of the decision tree model is 73.4 %.
+ 
+### 4.3. LDA
+```{r, echo=TRUE}
+model_lda <- train(classe ~ ., data = train_s, method = "lda")
+pred_lda <- predict(model_lda, test_s)
+levels(model_lda)
+levels(testset$classe)
+
+confusionMatrix(test_s$classe, pred_lda)
+```
+* The predictive accuracy of the LDA model is 71.6 %
+
+### 4.4. Recursive partitioning 
+```{r, echo=TRUE}
+model_rpart <- train(classe ~ ., data = train_s, method = "rpart")
+pred_rpart<- predict(model_rpart, test_s)
+confusionMatrix(test_s$classe, pred_rpart)
+```
+* The predictive accuracy of the Recursive partitioning model is 48.9 %
+
+
+## 5. Submit data with Random Forest
+
+```{r, echo=TRUE}
+submit_rf <- predict(mod_RF, test_s)
+submit_rf
+```
+*  We use the random forest model because it model had the high accuracy to submit data.
+
+## Conclusion: 
+ * To summarize, the predictive accuracy of the three models evaluated is as follows:
+
+* 1. Decision Tree Model: 74.90 %
+* 2. LDA: 98.45 %
+* 3. Random Forest Model: 99.80 %
+
+
+
